@@ -53,5 +53,10 @@
 - name: Generate Hyperledger Fabric-X Load generators crypto
   ansible.builtin.import_playbook: hyperledger.fabricx.loadgen.generate_crypto
 
+- name: Generate Fabric-X EVM gateway crypto
+  ansible.builtin.import_playbook: hyperledger.fabricx.evm_gateway.generate_crypto
+  when:
+    - "'evm_gateways' in groups"
+
 - name: Generate Monitoring tools crypto
   ansible.builtin.import_playbook: hyperledger.fabricx.monitoring.generate_crypto

@@ -1,0 +1,13 @@
+#
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+- name: Remove Fabric-X EVM gateway container
+  vars:
+    container_name: "{{ evm_gateway_container_name }}"
+    container_image: "{{ evm_gateway_image }}"
+  ansible.builtin.include_role:
+    name: hyperledger.fabricx.container
+    tasks_from: rm

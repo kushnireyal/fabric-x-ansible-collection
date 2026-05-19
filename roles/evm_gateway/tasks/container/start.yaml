@@ -1,0 +1,25 @@
+#
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+- name: Start the Fabric-X EVM gateway container
+  vars:
+    container_name: "{{ evm_gateway_container_name }}"
+    container_image: "{{ evm_gateway_image }}"
+    container_command: >-
+      start
+      --config={{ evm_gateway_container_config_dir }}/{{ evm_gateway_config_file }}
+    container_ports:
+      - "{{ evm_gateway_rpc_port }}:{{ evm_gateway_rpc_port }}"
+      - "{{ evm_gateway_metrics_port }}:{{ evm_gateway_metrics_port }}"
+    container_volumes:
+      - "{{ evm_gateway_remote_config_dir }}:{{ evm_gateway_container_config_dir }}:z,ro"
+      - "{{ evm_gateway_remote_data_dir }}:{{ evm_gateway_container_data_dir }}:z"
+    container_wait_until_running: true
+    container_run_as_host_user: true
+    container_wait_port: "{{ evm_gateway_rpc_port }}"
+  ansible.builtin.include_role:
+    name: hyperledger.fabricx.container
+    tasks_from: start

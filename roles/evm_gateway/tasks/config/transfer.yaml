@@ -1,0 +1,97 @@
+#
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# =========================
+# EVM Gateway
+# =========================
+- name: Transfer the Fabric-X EVM gateway config files
+  vars:
+    committer_sidecar_host: >-
+      {{
+        committer_hosts
+        | map('extract', hostvars)
+        | selectattr('committer_component_type', 'defined')
+        | selectattr('committer_component_type', '==', 'sidecar')
+        | map(attribute='inventory_hostname')
+        | list
+        | first
+      }}
+  block:
+    - name: Ensure the Fabric-X EVM gateway config directory exists
+      ansible.builtin.file:
+        path: "{{ evm_gateway_remote_config_dir }}"
+        state: directory
+        mode: "0o755"
+
+    - name: Ensure the Fabric-X EVM gateway data directory exists
+      ansible.builtin.file:
+        path: "{{ evm_gateway_remote_data_dir }}"
+        state: directory
+        mode: "0o755"
+
+    - name: Generate the config for the Fabric-X EVM gateway
+      ansible.builtin.template:
+        src: "config-evm-gateway.yaml.j2"
+        dest: "{{ evm_gateway_remote_config_dir }}/{{ evm_gateway_config_file }}"
+        mode: "0o644"
+
+    # =========================
+    # Committer Sidecar TLS CA
+    # =========================
+    - name: Ensure Fabric-X EVM gateway sidecar TLS folder exists
+      ansible.builtin.file:
+        path: "{{ evm_gateway_remote_config_dir }}/tls/sidecar"
+        state: directory
+        mode: "0o755"
+      when:
+        - hostvars[committer_sidecar_host].committer_use_tls is defined
+        - hostvars[committer_sidecar_host].committer_use_tls
+
+    - name: Transfer Fabric-X EVM gateway committer sidecar TLS CA certificate
+      ansible.builtin.copy:
+        src: "{{ fetched_artifacts_dir }}/{{ committer_sidecar_host }}/tls/ca.crt"
+        dest: "{{ evm_gateway_remote_config_dir }}/tls/sidecar/ca.crt"
+        mode: "0o644"
+      when:
+        - hostvars[committer_sidecar_host].committer_use_tls is defined
+        - hostvars[committer_sidecar_host].committer_use_tls
+
+    # =========================
+    # Orderer Router TLS CAs
+    # =========================
+    - name: Transfer Fabric-X EVM gateway orderer TLS CA certificates
+      vars:
+        orderer_router_hosts: >-
+          {{
+            orderer_hosts
+            | map('extract', hostvars)
+            | selectattr('orderer_component_type', '==', 'router')
+            | list
+          }}
+      block:
+        - name: Ensure EVM gateway orderer TLS CA directory exists
+          ansible.builtin.file:
+            path: "{{ evm_gateway_remote_config_dir }}/tls/orderer/{{ item.inventory_hostname }}"
+            state: directory
+            mode: "0o755"
+          loop: "{{ orderer_router_hosts }}"
+          loop_control:
+            label: "{{ item.inventory_hostname }}"
+          when:
+            - item.orderer_use_tls is defined
+            - item.orderer_use_tls
+
+        - name: Copy orderer TLS CA certificate
+          ansible.builtin.copy:
+            src: "{{ fetched_artifacts_dir }}/{{ item.inventory_hostname }}/tls/ca.crt"
+            dest: "{{ evm_gateway_remote_config_dir }}/tls/orderer/{{ item.inventory_hostname }}/ca.crt"
+            mode: "0o644"
+          loop: "{{ orderer_router_hosts }}"
+          loop_control:
+            label: "{{ item.inventory_hostname }}"
+          when:
+            - item.orderer_use_tls is defined
+            - item.orderer_use_tls

@@ -1,0 +1,88 @@
+#
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Fabric-X EVM gateway configuration rendered by Ansible.
+# Template: roles/evm_gateway/templates/config-evm-gateway.yaml.j2
+#
+
+network:
+  protocol: {{ evm_gateway_protocol }}
+  channel: {{ evm_gateway_channel }}
+  namespace: {{ evm_gateway_namespace }}
+  ns-version: "{{ evm_gateway_ns_version }}"
+  chain-id: {{ evm_gateway_chain_id }}
+
+gateway:
+  listen: "0.0.0.0:{{ evm_gateway_rpc_port }}"
+  worker-count: {{ evm_gateway_worker_count }}
+  sync-timeout: {{ evm_gateway_sync_timeout }}
+
+  identity:
+    msp-id: {{ organization.name }}MSP
+    msp-dir: {{ evm_gateway_config_dir }}/users/{{ organization.users[0].name }}@{{ organization.domain }}/msp
+
+  database:
+    connection-string: "{{ evm_gateway_db_conn_string }}"
+    trie-path: "{{ evm_gateway_trie_path }}"
+
+  orderers:
+{% for orderer_host in orderer_hosts | map('extract', hostvars) | selectattr('orderer_component_type', '==', 'router') | list %}
+    - endpoint:
+        host: {{ orderer_host.ansible_host }}
+        port: {{ orderer_host.orderer_rpc_port }}
+{% if (orderer_host.orderer_use_tls is defined) and orderer_host.orderer_use_tls %}
+      tls:
+{% if (orderer_host.orderer_use_mtls is defined) and orderer_host.orderer_use_mtls %}
+        mode: mtls
+{% else %}
+        mode: tls
+{% endif %}
+        cert-path: {{ evm_gateway_config_dir }}/tls/client.crt
+        key-path: {{ evm_gateway_config_dir }}/tls/client.key
+        ca-cert-paths:
+          - {{ evm_gateway_config_dir }}/tls/orderer/{{ orderer_host.inventory_hostname }}/ca.crt
+{% endif %}
+{% endfor %}
+
+  committer:
+    endpoint:
+      host: {{ hostvars[committer_sidecar_host].ansible_host }}
+      port: {{ hostvars[committer_sidecar_host].committer_rpc_port }}
+{% if (hostvars[committer_sidecar_host].committer_use_tls is defined) and hostvars[committer_sidecar_host].committer_use_tls %}
+    tls:
+{% if (hostvars[committer_sidecar_host].committer_use_mtls is defined) and hostvars[committer_sidecar_host].committer_use_mtls %}
+      mode: mtls
+{% else %}
+      mode: tls
+{% endif %}
+      cert-path: {{ evm_gateway_config_dir }}/tls/client.crt
+      key-path: {{ evm_gateway_config_dir }}/tls/client.key
+      ca-cert-paths:
+        - {{ evm_gateway_config_dir }}/tls/sidecar/ca.crt
+{% endif %}
+
+endorsers:
+  - name: {{ organization.name }}
+    identity:
+      msp-id: {{ organization.name }}MSP
+      msp-dir: {{ evm_gateway_config_dir }}/peers/{{ evm_gateway_crypto_name }}.{{ organization.domain }}/msp
+    committer:
+      endpoint:
+        host: {{ hostvars[committer_sidecar_host].ansible_host }}
+        port: {{ hostvars[committer_sidecar_host].committer_rpc_port }}
+{% if (hostvars[committer_sidecar_host].committer_use_tls is defined) and hostvars[committer_sidecar_host].committer_use_tls %}
+      tls:
+{% if (hostvars[committer_sidecar_host].committer_use_mtls is defined) and hostvars[committer_sidecar_host].committer_use_mtls %}
+        mode: mtls
+{% else %}
+        mode: tls
+{% endif %}
+        cert-path: {{ evm_gateway_config_dir }}/tls/client.crt
+        key-path: {{ evm_gateway_config_dir }}/tls/client.key
+        ca-cert-paths:
+          - {{ evm_gateway_config_dir }}/tls/sidecar/ca.crt
+{% endif %}
+    database:
+      connection-string: "{{ evm_gateway_endorser_db_conn_string }}"

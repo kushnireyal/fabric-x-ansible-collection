@@ -1,0 +1,70 @@
+#
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# =========================
+# Peer MSP (endorser identity)
+# =========================
+- name: Ensure Fabric-X EVM gateway config directory exists
+  ansible.builtin.file:
+    path: "{{ evm_gateway_remote_config_dir }}/peers/{{ evm_gateway_crypto_name }}.{{ organization.domain }}"
+    state: directory
+    mode: "0o755"
+
+- name: Transfer the MSP peer crypto material for the EVM gateway endorser
+  ansible.posix.synchronize:
+    src: "{{ cryptogen_artifacts_dir }}/crypto/peerOrganizations/{{ organization.domain }}/peers/{{ evm_gateway_crypto_name }}.{{ organization.domain }}/msp"
+    dest: "{{ evm_gateway_remote_config_dir }}/peers/{{ evm_gateway_crypto_name }}.{{ organization.domain }}"
+
+# =========================
+# User MSP (gateway identity)
+# =========================
+- name: Ensure the EVM gateway users config directory exists
+  ansible.builtin.file:
+    path: "{{ evm_gateway_remote_config_dir }}/users"
+    state: directory
+    mode: "0o755"
+  when:
+    - organization.users is defined
+
+- name: Transfer the EVM gateway user crypto material
+  ansible.posix.synchronize:
+    src: "{{ cryptogen_artifacts_dir }}/crypto/peerOrganizations/{{ organization.domain }}/users/{{ user.name }}@{{ organization.domain }}"
+    dest: "{{ evm_gateway_remote_config_dir }}/users"
+  loop: "{{ organization.users }}"
+  loop_control:
+    label: "{{ user.name }}"
+    loop_var: user
+  when:
+    - organization.users is defined
+
+# =========================
+# User TLS (client certs for orderer/committer connections)
+# =========================
+- name: Ensure Fabric-X EVM gateway TLS directory exists
+  ansible.builtin.file:
+    path: "{{ evm_gateway_remote_config_dir }}/tls"
+    state: directory
+    mode: "0o755"
+  when:
+    - evm_gateway_use_tls or evm_gateway_monitoring_use_tls
+
+- name: Transfer user TLS client certificate
+  ansible.builtin.copy:
+    src: "{{ cryptogen_artifacts_dir }}/crypto/peerOrganizations/{{ organization.domain }}/users/{{ organization.users[0].name }}@{{ organization.domain }}/tls/client.crt"
+    dest: "{{ evm_gateway_remote_config_dir }}/tls/client.crt"
+    mode: "0o644"
+  when:
+    - evm_gateway_use_tls or evm_gateway_monitoring_use_tls
+    - organization.users is defined
+
+- name: Transfer user TLS client key
+  ansible.builtin.copy:
+    src: "{{ cryptogen_artifacts_dir }}/crypto/peerOrganizations/{{ organization.domain }}/users/{{ organization.users[0].name }}@{{ organization.domain }}/tls/client.key"
+    dest: "{{ evm_gateway_remote_config_dir }}/tls/client.key"
+    mode: "0o600"
+  when:
+    - evm_gateway_use_tls or evm_gateway_monitoring_use_tls
+    - organization.users is defined

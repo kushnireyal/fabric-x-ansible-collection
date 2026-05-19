@@ -306,6 +306,34 @@ all:
           loadgen_rpc_port: 12020
 
     # =========================
+    # EVM Gateway
+    # =========================
+    evm_gateways:
+      vars:
+        evm_gateway_use_tls: true
+        evm_gateway_use_mtls: true
+        evm_gateway_image: "fabric-x-evm:dev"
+        evm_gateway_metrics_port: 9091
+      hosts:
+        evm-gateway-local-1:
+          evm_gateway_namespace: "evmns1"
+          evm_gateway_rpc_port: 8546
+          evm_gateway_use_container: true
+          organization:
+            <<: *Org1
+            fabric_ca_host: fca-org1
+            role: peer
+            peer:
+              name: "{{ inventory_hostname }}"
+              secret: "{{ inventory_hostname }}PWD"
+            users:
+              - name: User1
+                secret: User1PWD
+            namespaces:
+              - id: "evmns1"
+                policy: threshold
+
+    # =========================
     # Monitoring Infra
     # =========================
     monitoring:

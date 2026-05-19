@@ -1,0 +1,31 @@
+#
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+- name: Check that a peer role is provided
+  ansible.builtin.fail:
+    msg: "Cannot setup crypto material for Fabric-X EVM gateway if is not a peer. Please set the field 'organization.role' as 'peer'."
+  when:
+    - (organization.role is undefined) or (organization.role != 'peer')
+
+# =========================
+# With cryptogen
+# =========================
+- name: Transfer the crypto material generated with cryptogen
+  ansible.builtin.include_role:
+    name: hyperledger.fabricx.evm_gateway
+    tasks_from: crypto/cryptogen/transfer
+  when:
+    - organization.fabric_ca_host is undefined
+
+# =========================
+# With Fabric-CA
+# =========================
+- name: Enroll with Fabric-CA to generate the crypto material
+  ansible.builtin.include_role:
+    name: hyperledger.fabricx.evm_gateway
+    tasks_from: crypto/fabric_ca/enroll
+  when:
+    - organization.fabric_ca_host is defined
