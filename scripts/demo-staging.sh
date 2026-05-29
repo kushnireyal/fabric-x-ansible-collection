@@ -49,6 +49,7 @@ QUIET=false
 WRAP_COUNT=1
 PERF_SWEEP=false
 SUBMITTING_WORKERS=8
+PROCESSING_WORKERS=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -58,6 +59,7 @@ while [[ $# -gt 0 ]]; do
     --wrap-count)          WRAP_COUNT="$2"; shift 2 ;;
     --perf-sweep)          PERF_SWEEP=true; shift ;;
     --submitting-workers)  SUBMITTING_WORKERS="$2"; shift 2 ;;
+    --processing-workers)  PROCESSING_WORKERS="$2"; shift 2 ;;
     --quiet)               QUIET=true; shift ;;
     --dry-run)             DRY_RUN=true; shift ;;
     *) echo "Unknown flag: $1" >&2; exit 1 ;;
@@ -259,13 +261,13 @@ for i in "${!HOSTS[@]}"; do
   n=$((i + 1))
   remote_log="/tmp/perf-replica-${n}.log"
 
-  echo "+ ssh $host 'nohup PERF_REPLAY_WRAP_COUNT=${WRAP_COUNT} PERF_SUBMITTING_WORKERS=${SUBMITTING_WORKERS} go test -v -tags perf -run ^${RUN_TEST}\$ -timeout 0 ./integration/perf/ > $remote_log 2>&1 &'"
+  echo "+ ssh $host 'nohup PERF_REPLAY_WRAP_COUNT=${WRAP_COUNT} PERF_SUBMITTING_WORKERS=${SUBMITTING_WORKERS} PERF_PROCESSING_WORKERS=${PROCESSING_WORKERS} go test -v -tags perf -run ^${RUN_TEST}\$ -timeout 0 ./integration/perf/ > $remote_log 2>&1 &'"
   if [[ "$DRY_RUN" != true ]]; then
     # >/dev/null 2>&1 at the nohup level detaches bash-c from the SSH channel's
     # stdout fd. Without it, the SSH channel stays open until the go test finishes
     # (bash-c inherits the channel fd), blocking this pid=$(...) for the test duration.
     # go test output is still captured via the inner redirect > ${remote_log} 2>&1.
-    pid=$(ssh "$host" "nohup bash -c 'cd ${EVM_DIR} && PERF_REPLAY_WRAP_COUNT=${WRAP_COUNT} PERF_SUBMITTING_WORKERS=${SUBMITTING_WORKERS} FABX_CONFIG_PATH=/data/fabric-x-evm-test-config-${n}.yaml go test -v -count=1 -tags perf \
+    pid=$(ssh "$host" "nohup bash -c 'cd ${EVM_DIR} && PERF_REPLAY_WRAP_COUNT=${WRAP_COUNT} PERF_SUBMITTING_WORKERS=${SUBMITTING_WORKERS} PERF_PROCESSING_WORKERS=${PROCESSING_WORKERS} FABX_CONFIG_PATH=/data/fabric-x-evm-test-config-${n}.yaml go test -v -count=1 -tags perf \
       -run ^${RUN_TEST}\$ -timeout 0 \
       ./integration/perf/ > ${remote_log} 2>&1' >/dev/null 2>&1 & echo \$!")
     launched_hosts+=("$host")

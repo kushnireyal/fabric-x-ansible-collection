@@ -318,6 +318,7 @@ endorsers:
         ca-cert-paths:
           - ${GATEWAY_CONFIG_DIR}/tls/sidecar/ca.crt
     database:
+      database: sqlite
       connection-string: "file:/tmp/fabx-local-test-endorser-$$.db"
 FABXCFG
     vecho "Generated test config: $FABX_LOCAL_CONFIG"
