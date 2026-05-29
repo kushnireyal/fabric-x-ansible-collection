@@ -331,7 +331,7 @@ all:
                 secret: User1PWD
             namespaces:
               - id: "evmns1"
-                policy: threshold
+                policy: "OR('Org1MSP.member')"
 
     # =========================
     # Monitoring Infra

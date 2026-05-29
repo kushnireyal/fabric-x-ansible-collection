@@ -275,7 +275,7 @@ all:
               - name: User1
             namespaces:
               - id: "evmns1"
-                policy: threshold
+                policy: "OR('Org1MSP.member')"
         evm-gateway-2:
           ansible_host: "{{ ibm_evm_2 }}"
           evm_gateway_namespace: "evmns2"
@@ -288,7 +288,7 @@ all:
               - name: User1
             namespaces:
               - id: "evmns2"
-                policy: threshold
+                policy: "OR('Org1MSP.member')"
         evm-gateway-3:
           ansible_host: "{{ ibm_evm_3 }}"
           evm_gateway_namespace: "evmns3"
@@ -301,7 +301,7 @@ all:
               - name: User1
             namespaces:
               - id: "evmns3"
-                policy: threshold
+                policy: "OR('Org1MSP.member')"
         evm-gateway-4:
           ansible_host: "{{ ibm_evm_4 }}"
           evm_gateway_namespace: "evmns4"
@@ -314,7 +314,7 @@ all:
               - name: User1
             namespaces:
               - id: "evmns4"
-                policy: threshold
+                policy: "OR('Org1MSP.member')"
         evm-gateway-5:
           ansible_host: "{{ ibm_evm_5 }}"
           evm_gateway_namespace: "evmns5"
@@ -327,7 +327,7 @@ all:
               - name: User1
             namespaces:
               - id: "evmns5"
-                policy: threshold
+                policy: "OR('Org1MSP.member')"
 
     # =========================
     # Monitoring Infra
