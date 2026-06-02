@@ -4,6 +4,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+- name: Teardown EVM gateway
+  ansible.builtin.import_playbook: hyperledger.fabricx.evm_gateway.teardown
+
 - name: Teardown Loadgen
   ansible.builtin.import_playbook: hyperledger.fabricx.loadgen.teardown
 

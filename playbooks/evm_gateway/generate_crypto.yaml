@@ -1,0 +1,17 @@
+#
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+- name: Generate Fabric-X EVM gateway crypto material
+  hosts: "{{ target_hosts | default('evm_gateways') }}:&evm_gateways"
+  tasks:
+    - name: Setup the crypto material for the EVM gateway
+      ansible.builtin.include_role:
+        name: hyperledger.fabricx.evm_gateway
+        tasks_from: crypto/setup
+    - name: Fetch EVM gateway certificates
+      ansible.builtin.include_role:
+        name: hyperledger.fabricx.evm_gateway
+        tasks_from: crypto/fetch

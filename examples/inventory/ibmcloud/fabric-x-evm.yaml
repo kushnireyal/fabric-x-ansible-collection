@@ -1,0 +1,382 @@
+#
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# IBM Cloud inventory for the Fabric-X-EVM performance demo.
+#
+# Target: ≥1000 aggregate TPS across 5 parallel EVM gateway replicas, each
+# operating on its own Fabric namespace, sharing a single Fabric-X ordering
+# and commit infrastructure.
+#
+# VM layout (8 VMs total):
+#   ibm_orderer_1   — all 4 orderer groups (router/consenter/assembler/batcher)
+#   ibm_committer_1 — committer stack (sidecar+coordinator+query-service+
+#                     2 validators+2 verifiers) + YugabyteDB (1 master+2 tablets)
+#   ibm_evm_1..5    — one EVM gateway + workload generator per replica
+#   ibm_monitoring_1 — Prometheus + Grafana + node exporters
+#
+# Ports are per-group offset by 100 (group 1: 705x, group 2: 715x, …) so all
+# 4 orderer groups can co-exist on a single VM without conflicts.
+#
+# Fill in the FILL_IN_* placeholders in group_vars/all/env.yaml before running.
+
+all:
+  vars:
+    # =========================
+    # Organizations
+    # =========================
+    organizations:
+      orderer_org_1: &OrdererOrg1
+        name: OrdererOrg1
+        domain: ordererorg1.example.com
+      orderer_org_2: &OrdererOrg2
+        name: OrdererOrg2
+        domain: ordererorg2.example.com
+      orderer_org_3: &OrdererOrg3
+        name: OrdererOrg3
+        domain: ordererorg3.example.com
+      orderer_org_4: &OrdererOrg4
+        name: OrdererOrg4
+        domain: ordererorg4.example.com
+      org1: &Org1
+        name: Org1
+        domain: org1.example.com
+  children:
+    # =========================
+    # Network (HLFX)
+    # =========================
+    network:
+      children:
+        # =========================
+        # Hyperledger Fabric-X
+        # =========================
+        fabric_x:
+          children:
+            # =========================
+            # HLFX Orderers
+            # All 4 groups co-located on ibm_orderer_1.
+            # Ports are offset by 100 per group to avoid conflicts.
+            # =========================
+            fabric_x_orderers:
+              vars:
+                orderer_use_tls: true
+                orderer_use_mtls: true
+              children:
+                fabric_x_orderer_1:
+                  vars:
+                    organization:
+                      <<: *OrdererOrg1
+                      role: orderer
+                    ansible_host: "{{ ibm_orderer_1 }}"
+                    orderer_group: 1
+                  hosts:
+                    orderer-router-1:
+                      orderer_component_type: router
+                      orderer_rpc_port: 7050
+                      orderer_operations_port: 7060
+                    orderer-consenter-1:
+                      orderer_component_type: consensus
+                      orderer_rpc_port: 7051
+                      orderer_operations_port: 7061
+                    orderer-assembler-1:
+                      orderer_component_type: assembler
+                      orderer_rpc_port: 7052
+                      orderer_operations_port: 7062
+                    orderer-batcher-1:
+                      orderer_component_type: batcher
+                      orderer_shard_id: 1
+                      orderer_rpc_port: 7053
+                      orderer_operations_port: 7063
+                fabric_x_orderer_2:
+                  vars:
+                    organization:
+                      <<: *OrdererOrg2
+                      role: orderer
+                    ansible_host: "{{ ibm_orderer_1 }}"
+                    orderer_group: 2
+                  hosts:
+                    orderer-router-2:
+                      orderer_component_type: router
+                      orderer_rpc_port: 7150
+                      orderer_operations_port: 7160
+                    orderer-consenter-2:
+                      orderer_component_type: consensus
+                      orderer_rpc_port: 7151
+                      orderer_operations_port: 7161
+                    orderer-assembler-2:
+                      orderer_component_type: assembler
+                      orderer_rpc_port: 7152
+                      orderer_operations_port: 7162
+                    orderer-batcher-2:
+                      orderer_component_type: batcher
+                      orderer_shard_id: 1
+                      orderer_rpc_port: 7153
+                      orderer_operations_port: 7163
+                fabric_x_orderer_3:
+                  vars:
+                    organization:
+                      <<: *OrdererOrg3
+                      role: orderer
+                    ansible_host: "{{ ibm_orderer_1 }}"
+                    orderer_group: 3
+                  hosts:
+                    orderer-router-3:
+                      orderer_component_type: router
+                      orderer_rpc_port: 7250
+                      orderer_operations_port: 7260
+                    orderer-consenter-3:
+                      orderer_component_type: consensus
+                      orderer_rpc_port: 7251
+                      orderer_operations_port: 7261
+                    orderer-assembler-3:
+                      orderer_component_type: assembler
+                      orderer_rpc_port: 7252
+                      orderer_operations_port: 7262
+                    orderer-batcher-3:
+                      orderer_component_type: batcher
+                      orderer_shard_id: 1
+                      orderer_rpc_port: 7253
+                      orderer_operations_port: 7263
+                fabric_x_orderer_4:
+                  vars:
+                    organization:
+                      <<: *OrdererOrg4
+                      role: orderer
+                    ansible_host: "{{ ibm_orderer_1 }}"
+                    orderer_group: 4
+                  hosts:
+                    orderer-router-4:
+                      orderer_component_type: router
+                      orderer_rpc_port: 7350
+                      orderer_operations_port: 7360
+                    orderer-consenter-4:
+                      orderer_component_type: consensus
+                      orderer_rpc_port: 7351
+                      orderer_operations_port: 7361
+                    orderer-assembler-4:
+                      orderer_component_type: assembler
+                      orderer_rpc_port: 7352
+                      orderer_operations_port: 7362
+                    orderer-batcher-4:
+                      orderer_component_type: batcher
+                      orderer_shard_id: 1
+                      orderer_rpc_port: 7353
+                      orderer_operations_port: 7363
+
+            # =========================
+            # HLFX Committer
+            # Reduced from the distributed reference (7 validators → 2, 7 verifiers → 2)
+            # for the 1000 TPS demo target. Scale up if throughput headroom is needed.
+            # =========================
+            fabric_x_committer:
+              vars:
+                committer_use_tls: true
+                committer_use_mtls: true
+                committer_monitoring_mtls_clients:
+                  - prometheus
+                organization:
+                  <<: *Org1
+                  role: peer
+              hosts:
+                committer-sidecar:
+                  committer_component_type: sidecar
+                  ansible_host: "{{ ibm_committer_1 }}"
+                  committer_rpc_port: 5130
+                  committer_metrics_port: 5230
+                committer-coordinator:
+                  committer_component_type: coordinator
+                  ansible_host: "{{ ibm_committer_1 }}"
+                  committer_rpc_port: 5120
+                  committer_metrics_port: 5220
+                committer-query-service:
+                  committer_component_type: query-service
+                  ansible_host: "{{ ibm_committer_1 }}"
+                  yugabyte_cluster_ref_id: 1
+                  committer_rpc_port: 5140
+                  committer_metrics_port: 5240
+              children:
+                committer_validators:
+                  vars:
+                    committer_component_type: validator
+                    committer_rpc_port: 5100
+                    committer_metrics_port: 5200
+                    yugabyte_cluster_ref_id: 1
+                    committer_resource_limits_max_workers_for_preparer: 8
+                    committer_resource_limits_max_workers_for_validator: 8
+                  hosts:
+                    committer-validator-1:
+                      ansible_host: "{{ ibm_committer_1 }}"
+                    committer-validator-2:
+                      ansible_host: "{{ ibm_committer_1 }}"
+                committer_verifiers:
+                  vars:
+                    committer_component_type: verifier
+                    committer_rpc_port: 5110
+                    committer_metrics_port: 5210
+                  hosts:
+                    committer-verifier-1:
+                      ansible_host: "{{ ibm_committer_1 }}"
+                    committer-verifier-2:
+                      ansible_host: "{{ ibm_committer_1 }}"
+                committer_dbs:
+                  vars:
+                    yugabyte_user: yugabyte
+                    yugabyte_password: yugabyte
+                    yugabyte_db: yugabyte
+                    yugabyte_cluster_id: 1
+                    yugabyte_use_tls: true
+                  children:
+                    yb_masters:
+                      vars:
+                        yugabyte_component_type: master
+                        yugabyte_master_rpc_bind_port: 5300
+                        yugabyte_master_webserver_port: 5310
+                      hosts:
+                        yugabytedb-master-1:
+                          ansible_host: "{{ ibm_committer_1 }}"
+                    yb_tablets:
+                      vars:
+                        yugabyte_component_type: tablet
+                        yugabyte_tablet_pgsql_bind_port: 5320
+                        yugabyte_tablet_rpc_bind_port: 5330
+                        yugabyte_tablet_webserver_port: 5340
+                        yugabyte_tablet_cql_web_port: 5360
+                        yugabyte_tablet_pgsql_web_port: 5370
+                        yugabyte_tablet_cql_bind_port: 5380
+                      hosts:
+                        yugabytedb-tablet-1:
+                          ansible_host: "{{ ibm_committer_1 }}"
+                        yugabytedb-tablet-2:
+                          ansible_host: "{{ ibm_committer_1 }}"
+
+    # =========================
+    # EVM Gateways
+    # 5 replicas, each on its own VM, each operating on a distinct Fabric namespace.
+    # The EVM workload generator (go test binary) runs directly on the same VM —
+    # no separate Ansible role needed, it is started by a command task in the playbook.
+    # =========================
+    evm_gateways:
+      vars:
+        evm_gateway_use_tls: true
+        evm_gateway_use_mtls: true
+        evm_gateway_image: "FILL_IN_EVM_GATEWAY_IMAGE"
+      hosts:
+        evm-gateway-1:
+          ansible_host: "{{ ibm_evm_1 }}"
+          evm_gateway_namespace: "evmns1"
+          evm_gateway_rpc_port: 8545
+          evm_gateway_metrics_port: 9091
+          organization:
+            <<: *Org1
+            role: peer
+            users:
+              - name: User1
+            namespaces:
+              - id: "evmns1"
+                policy: "OR('Org1MSP.member')"
+        evm-gateway-2:
+          ansible_host: "{{ ibm_evm_2 }}"
+          evm_gateway_namespace: "evmns2"
+          evm_gateway_rpc_port: 8545
+          evm_gateway_metrics_port: 9091
+          organization:
+            <<: *Org1
+            role: peer
+            users:
+              - name: User1
+            namespaces:
+              - id: "evmns2"
+                policy: "OR('Org1MSP.member')"
+        evm-gateway-3:
+          ansible_host: "{{ ibm_evm_3 }}"
+          evm_gateway_namespace: "evmns3"
+          evm_gateway_rpc_port: 8545
+          evm_gateway_metrics_port: 9091
+          organization:
+            <<: *Org1
+            role: peer
+            users:
+              - name: User1
+            namespaces:
+              - id: "evmns3"
+                policy: "OR('Org1MSP.member')"
+        evm-gateway-4:
+          ansible_host: "{{ ibm_evm_4 }}"
+          evm_gateway_namespace: "evmns4"
+          evm_gateway_rpc_port: 8545
+          evm_gateway_metrics_port: 9091
+          organization:
+            <<: *Org1
+            role: peer
+            users:
+              - name: User1
+            namespaces:
+              - id: "evmns4"
+                policy: "OR('Org1MSP.member')"
+        evm-gateway-5:
+          ansible_host: "{{ ibm_evm_5 }}"
+          evm_gateway_namespace: "evmns5"
+          evm_gateway_rpc_port: 8545
+          evm_gateway_metrics_port: 9091
+          organization:
+            <<: *Org1
+            role: peer
+            users:
+              - name: User1
+            namespaces:
+              - id: "evmns5"
+                policy: "OR('Org1MSP.member')"
+
+    # =========================
+    # Monitoring Infra
+    # =========================
+    monitoring:
+      vars:
+        ansible_host: "{{ ibm_monitoring_1 }}"
+      children:
+        node_exporters:
+          vars:
+            node_exporter_port: 9111
+            node_exporter_use_tls: true
+          hosts:
+            node-exporter-orderer-1:
+              ansible_host: "{{ ibm_orderer_1 }}"
+            node-exporter-committer-1:
+              ansible_host: "{{ ibm_committer_1 }}"
+            node-exporter-evm-1:
+              ansible_host: "{{ ibm_evm_1 }}"
+            node-exporter-evm-2:
+              ansible_host: "{{ ibm_evm_2 }}"
+            node-exporter-evm-3:
+              ansible_host: "{{ ibm_evm_3 }}"
+            node-exporter-evm-4:
+              ansible_host: "{{ ibm_evm_4 }}"
+            node-exporter-evm-5:
+              ansible_host: "{{ ibm_evm_5 }}"
+            node-exporter-monitoring-1:
+              ansible_host: "{{ ibm_monitoring_1 }}"
+      hosts:
+        prometheus:
+          prometheus_port: 9090
+          prometheus_use_tls: true
+          # Scrape the EVM loadgen test process on each EVM VM. The loadgen runs
+          # alongside the deployed gateway (started by demo-staging.sh as
+          # `go test`), and exposes its own metrics endpoint on port 9092 when
+          # EVM_METRICS_ADDR is set. The deployed gateway itself uses 9091.
+          prometheus_extra_static_jobs:
+            - job_name: evm_loadgen.test_process
+              scheme: http
+              targets:
+                - "{{ ibm_evm_1 }}:9092"
+                - "{{ ibm_evm_2 }}:9092"
+                - "{{ ibm_evm_3 }}:9092"
+                - "{{ ibm_evm_4 }}:9092"
+                - "{{ ibm_evm_5 }}:9092"
+        grafana:
+          grafana_username: admin
+          grafana_password: adminPWD
+          grafana_web_port: 3000
+          prometheus_host: prometheus
+          grafana_use_tls: true

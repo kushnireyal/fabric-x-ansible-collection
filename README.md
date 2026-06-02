@@ -206,10 +206,19 @@ This command runs post-start initialization, such as creating the namespaces ind
 
 ### 4. Observe the network
 
-You can access [Grafana dashboards](http://localhost:3000/dashboards) (user=_admin_, password=_adminPWD_) to see how the Fabric-X network is handling the transactions processing.
+Grafana is deployed as part of the stack and exposes two pre-built dashboards:
+
+| Dashboard | URL | Content |
+|-----------|-----|---------|
+| Fabric-X-Committer Performance | `https://localhost:3000/d/UDdpyzz7zav2` | Block and transaction throughput, 99th-percentile latency, relay queue depths, coordinator connection status |
+| Fabric-X-Orderer | `https://localhost:3000/dashboards` | Batcher mempool size, batches/s, TX per block, consenter decisions/s, router rejected requests/s |
+
+Default credentials: user=_admin_, password=_adminPWD_ (TLS enabled; accept the self-signed cert in your browser).
 
 > [!NOTE]
 > These Grafana credentials are sample defaults. Change them before using an adapted inventory in a shared environment.
+
+When running `scripts/demo-local.sh` or `scripts/demo-staging.sh`, the scripts print time-anchored Grafana links just before the workload starts so you can open the dashboards directly at the right time window. On staging the Grafana instance is at `https://10.0.0.6:3000`.
 
 ### 5. Teardown the network
 

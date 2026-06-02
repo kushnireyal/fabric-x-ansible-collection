@@ -357,4 +357,63 @@ fetch-crypto:
 .PHONY: limit-rate
 limit-rate:
 	@printf "$(COLOR_CYAN)🚩 Setting TPS rate limit to $(COLOR_GREEN)$(LIMIT)$(COLOR_CYAN)...$(COLOR_RESET)\n"
-	$(ANSIBLE_PLAYBOOK) hyperledger.fabricx.loadgen.limit_rate --extra-vars '{"loadgen_limit_rate": "$(LIMIT)"}';
+	$(ANSIBLE_PLAYBOOK) hyperledger.fabricx.loadgen.limit_rate --extra-vars '{"loadgen_limit_rate": "$(LIMIT)"}'
+
+# =======================
+# IBM Cloud (EVM Demo)
+# =======================
+IBM_CLOUD_INVENTORY := examples/inventory/ibmcloud/fabric-x-evm.yaml
+
+# Full setup against the IBM Cloud inventory (crypto + configs).
+.PHONY: ibmcloud-setup
+ibmcloud-setup:
+	ANSIBLE_INVENTORY=$(IBM_CLOUD_INVENTORY) $(MAKE) setup
+
+# Start all components against the IBM Cloud inventory.
+.PHONY: ibmcloud-start
+ibmcloud-start:
+	ANSIBLE_INVENTORY=$(IBM_CLOUD_INVENTORY) $(MAKE) start
+
+# Initialize namespaces against the IBM Cloud inventory.
+.PHONY: ibmcloud-init
+ibmcloud-init:
+	ANSIBLE_INVENTORY=$(IBM_CLOUD_INVENTORY) $(MAKE) init
+
+# Teardown all components against the IBM Cloud inventory.
+.PHONY: ibmcloud-teardown
+ibmcloud-teardown:
+	ANSIBLE_INVENTORY=$(IBM_CLOUD_INVENTORY) $(MAKE) teardown
+
+# Reset EVM gateway and committer state without reprovisioning VMs.
+# Use between demo runs to clear SQLite/trie/YugabyteDB state.
+.PHONY: ibmcloud-reset-state
+ibmcloud-reset-state:
+	ANSIBLE_INVENTORY=$(IBM_CLOUD_INVENTORY) TARGET_HOSTS=evm_gateways $(MAKE) teardown
+	ANSIBLE_INVENTORY=$(IBM_CLOUD_INVENTORY) TARGET_HOSTS=fabric_x_committer $(MAKE) teardown
+	ANSIBLE_INVENTORY=$(IBM_CLOUD_INVENTORY) TARGET_HOSTS=fabric_x_committer $(MAKE) start
+	ANSIBLE_INVENTORY=$(IBM_CLOUD_INVENTORY) TARGET_HOSTS=evm_gateways $(MAKE) start
+
+# Run the USDC ERC-20 performance demo against the local Docker stack.
+# Requires: EVM_REPO=<path to fabric-x-evm checkout>
+# Optional: EVM_BRANCH=<branch/ref to test>, DEMO_ARGS="--duration 120 --skip-teardown"
+EVM_BRANCH ?=
+.PHONY: demo-local
+demo-local:
+	scripts/demo-local.sh \
+		--evm-repo $(EVM_REPO) \
+		$(if $(EVM_BRANCH),--evm-branch $(EVM_BRANCH)) \
+		$(DEMO_ARGS)
+
+# Deploy EVM gateways on the IBM Cloud staging machines (dectrust5–7).
+# Must be run from dectrust8; see scripts/deploy-evm-staging.sh for prerequisites.
+# Optional: EVM_BRANCH=<branch/ref to build>
+.PHONY: deploy-staging
+deploy-staging:
+	scripts/deploy-evm-staging.sh $(if $(EVM_BRANCH),--evm-branch $(EVM_BRANCH))
+
+# Run the USDC replay workload on all 3 staging replicas and report aggregate TPS.
+# Must be run from dectrust8. Testdata must already be present on dectrust5–7.
+# Pass DEMO_ARGS to forward flags, e.g.: make demo-staging DEMO_ARGS=--skip-deploy
+.PHONY: demo-staging
+demo-staging:
+	scripts/demo-staging.sh $(DEMO_ARGS)

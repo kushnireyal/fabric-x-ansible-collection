@@ -251,6 +251,15 @@
           | selectattr('yugabyte_component_type', 'defined')
           | list
           | length > 0
+    - name: Transfer the Fabric-X EVM Loadgen Grafana Dashboard
+      ansible.builtin.include_role:
+        name: hyperledger.fabricx.evm_gateway
+        tasks_from: config/transfer_grafana_dashboard
+      when:
+        - grafana_web_port is defined
+        - groups['evm_gateways']
+          | default([])
+          | length > 0
     - name: Transfer the Grafana config files
       ansible.builtin.include_role:
         name: hyperledger.fabricx.grafana

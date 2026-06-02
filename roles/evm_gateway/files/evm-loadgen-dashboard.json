@@ -1,0 +1,818 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "uid": "evm-loadgen",
+  "title": "EVM Loadgen + In-Process Gateway",
+  "tags": [
+    "evm",
+    "fabric-x-evm",
+    "loadgen"
+  ],
+  "timezone": "browser",
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "version": 4,
+  "weekStart": "",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 100,
+      "type": "row",
+      "title": "Run config",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 101,
+      "type": "stat",
+      "title": "Processing workers (gateway in-process)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 8,
+        "h": 3
+      },
+      "targets": [
+        {
+          "expr": "evm_loadgen_workers{kind=\"processing\"}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "description": "Current value of `evm_loadgen_workers{kind=\"processing\"}`. Number of in-process gateway workers (set via PERF_PROCESSING_WORKERS). They dequeue from the gateway TxQueue, run ExecuteEthTx (endorse), and push to BatchSubmitter."
+    },
+    {
+      "id": 102,
+      "type": "stat",
+      "title": "Submitting workers (loadgen-side)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 8,
+        "h": 3
+      },
+      "targets": [
+        {
+          "expr": "evm_loadgen_workers{kind=\"submitting\"}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "description": "Current value of `evm_loadgen_workers{kind=\"submitting\"}`. Number of loadgen-side workers calling gateway.SendTransaction (set via PERF_SUBMITTING_WORKERS). They feed the gateway TxQueue."
+    },
+    {
+      "id": 103,
+      "type": "stat",
+      "title": "Failure ratio (committed result=failure)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 8,
+        "h": 3
+      },
+      "targets": [
+        {
+          "expr": "100 * sum(rate(evm_loadgen_committed_total{result!=\"success\"}[1m])) / clamp_min(sum(rate(evm_loadgen_committed_total[1m])), 1e-9)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "description": "Percent of commit notifications whose result was anything other than `success` (MVCC abort, ABORTED_SIGNATURE_INVALID, namespace policy reject, etc.) over the last 1m. Computed from `evm_loadgen_committed_total{result}`. Submission errors that never reach the committer are NOT counted here."
+    },
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Loadgen \u2014 workload generator",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 1
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "SendTransaction rate (per outcome)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(evm_loadgen_sendtx_total[30s]))",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      },
+      "description": "Rate of `gateway.SendTransaction` calls, split by outcome label: `enqueued` (passed ValidateTx and inserted into the gateway TxQueue) vs `validation_error` (rejected by ValidateTx \u2014 invalid signature, bad chain ID, etc.). Source: gateway/core/api.go:190 + :195. 30s rolling rate. This is SUBMISSION rate at the loadgen entry \u2014 NOT commit rate."
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Committed rate (per result)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (result) (rate(evm_loadgen_committed_total[30s]))",
+          "legendFormat": "{{result}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      },
+      "description": "Rate of commit notifications received by the test via `TxCompletionTracker.HandleTx`, split by `success` (committer status=COMMITTED) vs `failed` (any other status). 30s rolling rate. This is the actual END-TO-END throughput \u2014 what the committer has finalized. Works in both closed-loop and open-loop."
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "In-flight transactions",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "evm_loadgen_inflight",
+          "refId": "A"
+        }
+      ],
+      "description": "Current value of `evm_loadgen_inflight`: txs submitted by loadgen but not yet seen committed. CLOSED-LOOP ONLY \u2014 open-loop is fire-and-forget and doesn't track per-tx state."
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Gateway queue depth",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 13,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "evm_gateway_txqueue_size",
+          "refId": "A"
+        }
+      ],
+      "description": "Current value of `evm_gateway_txqueue_size`: txs held in the in-process gateway's TxQueue. With V2 (default closed-loop): `ready + waiting`. With V1 FIFO (open-loop, no dependency tracking): pending FIFO length."
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Send rate (1m)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 13,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(evm_loadgen_sendtx_total[1m]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      },
+      "description": "Single-number view of total SendTransaction rate over the last 1m, summed across outcomes. = `sum(rate(evm_loadgen_sendtx_total[1m]))`."
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Commit rate (1m)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 13,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(evm_loadgen_committed_total[1m]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      },
+      "description": "Single-number view of total commit-notification rate over the last 1m, summed across results (success + failed). = `sum(rate(evm_loadgen_committed_total[1m]))`. End-to-end throughput at a glance."
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Latency histograms (per stage)",
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 24,
+        "h": 1
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "SendTransaction duration (entry-side, typical and tail)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(evm_loadgen_sendtx_duration_seconds_bucket[1m])))",
+          "legendFormat": "typical (p50)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(evm_loadgen_sendtx_duration_seconds_bucket[1m])))",
+          "legendFormat": "slow 5% (p95)",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(evm_loadgen_sendtx_duration_seconds_bucket[1m])))",
+          "legendFormat": "worst 1% (p99)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "description": "Wall time of `gateway.SendTransaction` on the loadgen entry path. Includes Enqueue into the gateway TxQueue. p50/p95/p99. If high \u2192 loadgen submitters are blocked at entry (queue full, ECDSA contention, etc.)."
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "End-to-end commit latency (closed-loop, typical and tail)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(evm_loadgen_committed_latency_seconds_bucket[1m])))",
+          "legendFormat": "typical (p50)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(evm_loadgen_committed_latency_seconds_bucket[1m])))",
+          "legendFormat": "slow 5% (p95)",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(evm_loadgen_committed_latency_seconds_bucket[1m])))",
+          "legendFormat": "worst 1% (p99)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "description": "Per-tx latency from SendTransaction call to commit-notification receipt. p50/p95/p99. CLOSED-LOOP ONLY \u2014 open-loop doesn't track per-tx latency. Empty in open-loop runs is expected."
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Gateway queue \u2014 Enqueue duration",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(evm_gateway_txqueue_enqueue_duration_seconds_bucket[1m])))",
+          "legendFormat": "typical (p50)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(evm_gateway_txqueue_enqueue_duration_seconds_bucket[1m])))",
+          "legendFormat": "slow 5% (p95)",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(evm_gateway_txqueue_enqueue_duration_seconds_bucket[1m])))",
+          "legendFormat": "worst 1% (p99)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "description": "Wall time of TxQueue Enqueue inside the gateway. p50/p95/p99. Should be MICROSECONDS after the Step-6 fix (ECDSA hoisted out of the lock). If you see it climb \u2192 lock contention regression."
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Gateway queue \u2014 Dequeue duration",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 26,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(evm_gateway_txqueue_dequeue_duration_seconds_bucket[1m])))",
+          "legendFormat": "typical (p50)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(evm_gateway_txqueue_dequeue_duration_seconds_bucket[1m])))",
+          "legendFormat": "slow 5% (p95)",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(evm_gateway_txqueue_dequeue_duration_seconds_bucket[1m])))",
+          "legendFormat": "worst 1% (p99)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "description": "Wall time of TxQueue Dequeue. p50/p95/p99. Includes `cond.Wait` when the ready-list is empty, so this can be large when the queue is starved. Hot-loop (queue full): microseconds. Idle: seconds \u2014 that's the worker waiting, not a problem per se."
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Gateway queue \u2014 Enqueue rate vs Dequeue rate (log scale; gap = backlog buildup)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(evm_gateway_txqueue_enqueue_duration_seconds_count[30s])",
+          "legendFormat": "Enqueue/s",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(evm_gateway_txqueue_dequeue_duration_seconds_count[30s])",
+          "legendFormat": "Dequeue/s",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "scaleDistribution": {
+              "type": "log",
+              "log": 10
+            }
+          }
+        }
+      },
+      "description": "Per-second rate of Enqueue events vs Dequeue events. Log scale. GAP = backlog buildup: Enqueue > Dequeue \u21d2 queue growing (load > processing); Dequeue > Enqueue \u21d2 queue draining (catching up after a burst). Steady state: lines overlap."
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Gateway queue wait (Enqueue \u2192 Dequeue, typical and tail)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 42,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(evm_gateway_txqueue_wait_seconds_bucket[1m])))",
+          "legendFormat": "typical (p50)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(evm_gateway_txqueue_wait_seconds_bucket[1m])))",
+          "legendFormat": "slow 5% (p95)",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(evm_gateway_txqueue_wait_seconds_bucket[1m])))",
+          "legendFormat": "worst 1% (p99)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "description": "Per-tx time waiting in the queue between Enqueue and Dequeue (= time-in-queue). p50/p95/p99. Large values \u21d2 Dequeue can't keep up with Enqueue \u21d2 processing workers are the bottleneck."
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Endorse duration (ExecuteEthTx, typical and tail)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 42,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(evm_gateway_endorse_duration_seconds_bucket[1m])))",
+          "legendFormat": "typical (p50)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(evm_gateway_endorse_duration_seconds_bucket[1m])))",
+          "legendFormat": "slow 5% (p95)",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(evm_gateway_endorse_duration_seconds_bucket[1m])))",
+          "legendFormat": "worst 1% (p99)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "description": "Wall time of `processTx` = ExecuteEthTx inside the in-process gateway (EVM state read + tx execution + proposal build). p50/p95/p99. Per-tx CPU work done by each processing worker. Step-9 with V1 FIFO measured ~6ms p50 on laptop."
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "SDK Submit duration (gateway \u2192 orderer, typical and tail)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 50,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(evm_gateway_submit_duration_seconds_bucket[1m])))",
+          "legendFormat": "typical (p50)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(evm_gateway_submit_duration_seconds_bucket[1m])))",
+          "legendFormat": "slow 5% (p95)",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(evm_gateway_submit_duration_seconds_bucket[1m])))",
+          "legendFormat": "worst 1% (p99)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "description": "Wall time of `bs.submitter.Submit(ctx, endorsement)` \u2014 one call per tx inside the BatchSubmitter loop (gateway \u2192 orderer). p50/p95/p99. If p50 is much greater than 1ms while endorse rate is high, the sequential submit + 1ms MaxWaitTime in batch_submitter.go may be the next cap."
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Fine-grained \u2014 pinpointing where the worker spends time",
+      "gridPos": {
+        "x": 0,
+        "y": 58,
+        "w": 24,
+        "h": 1
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Worker cycle (Dequeue \u2192 Dequeue) \u2014 1/p50 = max worker throughput",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 59,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(evm_gateway_worker_cycle_seconds_bucket[1m])))",
+          "legendFormat": "typical (p50)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(evm_gateway_worker_cycle_seconds_bucket[1m])))",
+          "legendFormat": "slow 5% (p95)",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(evm_gateway_worker_cycle_seconds_bucket[1m])))",
+          "legendFormat": "worst 1% (p99)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "description": "Inter-iteration time of a single processing worker, measured from one Dequeue return to the next. p50/p95/p99. 1/p50 = MAX THROUGHPUT PER WORKER. Total achievable \u2248 workers \u00d7 1/p50, modulo downstream caps."
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "Dequeue cond.Wait (queue empty \u2014 worker idling waiting for new ready tx)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 59,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(evm_gateway_txqueue_dequeue_cond_wait_seconds_bucket[1m])))",
+          "legendFormat": "typical (p50)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(evm_gateway_txqueue_dequeue_cond_wait_seconds_bucket[1m])))",
+          "legendFormat": "slow 5% (p95)",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(evm_gateway_txqueue_dequeue_cond_wait_seconds_bucket[1m])))",
+          "legendFormat": "worst 1% (p99)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "description": "Time the worker spent parked in `cond.Wait` because the queue's ready-list was empty. p50/p95/p99. With TxQueueV2 this ALSO includes waiting for the prior dependent tx to commit so the next can be promoted to ready. Step-8 found this was the dominant cost on V2 (p99 = 4.88s)."
+    },
+    {
+      "id": 33,
+      "type": "timeseries",
+      "title": "Dequeue lock acquire (pure mutex contention \u2014 should be near zero)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 67,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(evm_gateway_txqueue_dequeue_lock_wait_seconds_bucket[1m])))",
+          "legendFormat": "typical (p50)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(evm_gateway_txqueue_dequeue_lock_wait_seconds_bucket[1m])))",
+          "legendFormat": "slow 5% (p95)",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(evm_gateway_txqueue_dequeue_lock_wait_seconds_bucket[1m])))",
+          "legendFormat": "worst 1% (p99)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "description": "Pure mutex-acquire latency for the queue lock during Dequeue. p50/p95/p99. SHOULD BE NEAR ZERO (microseconds). If non-trivial \u21d2 real lock contention from another thread holding it (most likely Complete \u2014 see the Complete panel)."
+    },
+    {
+      "id": 34,
+      "type": "timeseries",
+      "title": "Complete duration (holds the lock \u2014 blocks Dequeue/Enqueue)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 67,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(evm_gateway_txqueue_complete_duration_seconds_bucket[1m])))",
+          "legendFormat": "typical (p50)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(evm_gateway_txqueue_complete_duration_seconds_bucket[1m])))",
+          "legendFormat": "slow 5% (p95)",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(evm_gateway_txqueue_complete_duration_seconds_bucket[1m])))",
+          "legendFormat": "worst 1% (p99)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "description": "Wall time of TxQueue Complete \u2014 called when a tx finishes endorsing; removes it from in-flight bookkeeping. p50/p95/p99. HOLDS THE QUEUE LOCK while running, so spikes here directly block Dequeue/Enqueue (visible in the Dequeue lock-acquire panel)."
+    },
+    {
+      "id": 35,
+      "type": "timeseries",
+      "title": "Worker \u2192 BatchSubmitter chan send (downstream back-pressure)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 75,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(evm_gateway_worker_chan_send_seconds_bucket[1m])))",
+          "legendFormat": "typical (p50)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(evm_gateway_worker_chan_send_seconds_bucket[1m])))",
+          "legendFormat": "slow 5% (p95)",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(evm_gateway_worker_chan_send_seconds_bucket[1m])))",
+          "legendFormat": "worst 1% (p99)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "description": "Time the worker spent blocked on the channel send when handing the endorsement off to the BatchSubmitter. p50/p95/p99. If high \u21d2 BatchSubmitter (downstream) is the bottleneck \u2014 back-pressure has filled the chan buffer (1000-element)."
+    }
+  ]
+}

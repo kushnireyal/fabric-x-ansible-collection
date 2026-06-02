@@ -1,0 +1,16 @@
+#
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+- name: Transfer Fabric-X EVM gateway config files
+  hosts: "{{ target_hosts | default('evm_gateways') }}:&evm_gateways"
+  tasks:
+    - name: Transfer Fabric-X EVM gateway config files
+      vars:
+        committer_hosts: "{{ groups['fabric_x_committer'] | default([]) }}"
+        orderer_hosts: "{{ groups['fabric_x_orderers'] | default([]) }}"
+      ansible.builtin.include_role:
+        name: hyperledger.fabricx.evm_gateway
+        tasks_from: config/transfer

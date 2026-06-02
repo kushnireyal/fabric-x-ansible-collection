@@ -21,3 +21,6 @@
 
 - name: Transfer Loadgen configs
   ansible.builtin.import_playbook: hyperledger.fabricx.loadgen.configs
+
+- name: Transfer EVM gateway configs
+  ansible.builtin.import_playbook: hyperledger.fabricx.evm_gateway.configs

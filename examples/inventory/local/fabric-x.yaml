@@ -306,6 +306,34 @@ all:
           loadgen_rpc_port: 12020
 
     # =========================
+    # EVM Gateway
+    # =========================
+    evm_gateways:
+      vars:
+        evm_gateway_use_tls: true
+        evm_gateway_use_mtls: true
+        evm_gateway_image: "fabric-x-evm:dev"
+        evm_gateway_metrics_port: 9091
+      hosts:
+        evm-gateway-local-1:
+          evm_gateway_namespace: "evmns1"
+          evm_gateway_rpc_port: 8546
+          evm_gateway_use_container: true
+          organization:
+            <<: *Org1
+            fabric_ca_host: fca-org1
+            role: peer
+            peer:
+              name: "{{ inventory_hostname }}"
+              secret: "{{ inventory_hostname }}PWD"
+            users:
+              - name: User1
+                secret: User1PWD
+            namespaces:
+              - id: "evmns1"
+                policy: "OR('Org1MSP.member')"
+
+    # =========================
     # Monitoring Infra
     # =========================
     monitoring:
@@ -320,6 +348,14 @@ all:
         prometheus:
           prometheus_port: 9090
           prometheus_use_tls: true
+          # Extra raw static scrape jobs appended verbatim to prometheus.yaml.
+          # Used here for the EVM loadgen test process, which runs on the host
+          # (not as an inventory-managed container) on port 9092.
+          prometheus_extra_static_jobs:
+            - job_name: evm_loadgen.test_process
+              scheme: http
+              targets:
+                - host.docker.internal:9092
         grafana:
           grafana_username: admin
           grafana_password: adminPWD

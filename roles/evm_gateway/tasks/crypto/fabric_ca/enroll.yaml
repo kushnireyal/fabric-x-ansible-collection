@@ -1,0 +1,140 @@
+#
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+- name: Ensure TLS CA certificate folder exists
+  ansible.builtin.file:
+    path: "{{ evm_gateway_remote_config_dir }}/tlscacerts"
+    state: directory
+    mode: "0o755"
+  when:
+    - hostvars[organization.fabric_ca_host].fabric_ca_use_tls is defined
+    - hostvars[organization.fabric_ca_host].fabric_ca_use_tls
+
+- name: Copy TLS CA certificate of Fabric CA
+  ansible.builtin.copy:
+    src: "{{ fetched_artifacts_dir }}/crypto/peerOrganizations/{{ organization.domain }}/msp/tlscacerts/tlsca.{{ organization.domain }}-cert.pem"
+    dest: "{{ evm_gateway_remote_config_dir }}/tlscacerts"
+    mode: "preserve"
+  when:
+    - hostvars[organization.fabric_ca_host].fabric_ca_use_tls is defined
+    - hostvars[organization.fabric_ca_host].fabric_ca_use_tls
+
+# =========================
+# Peer MSP (endorser identity)
+# =========================
+- name: Generate Fabric-X EVM gateway peer MSP crypto material
+  vars:
+    fabric_ca_host: "{{ organization.fabric_ca_host }}"
+    fabric_ca_use_tls: "{{ hostvars[organization.fabric_ca_host].fabric_ca_use_tls | default(false) }}"
+    fabric_ca_name: "{{ hostvars[organization.fabric_ca_host].fabric_ca_name }}"
+    fabric_ca_msp_dir: "{{ evm_gateway_remote_config_dir }}/peers/{{ evm_gateway_crypto_name }}.{{ organization.domain }}/msp"
+    fabric_ca_cryptogenize_msp_ca_cert_file: "cacerts/ca.{{ organization.domain }}-cert.pem"
+    fabric_ca_cryptogenize_msp_signcert_file: "signcerts/{{ evm_gateway_crypto_name }}.{{ organization.domain }}-cert.pem"
+    fabric_ca_tls_certfile: "{{ evm_gateway_remote_config_dir }}/tlscacerts/tlsca.{{ organization.domain }}-cert.pem"
+    fabric_ca_csr_hosts: "{{ ansible_all_ipv4_addresses + [ansible_host] }}"
+    fabric_ca_identity:
+      name: "{{ organization.peer.name | default(inventory_hostname) }}"
+      secret: "{{ organization.peer.secret }}"
+  ansible.builtin.include_role:
+    name: hyperledger.fabricx.fabric_ca
+    tasks_from: client/enroll
+
+# =========================
+# User MSPs (gateway signing identity)
+# =========================
+- name: Generate Fabric-X EVM gateway user MSP crypto material
+  vars:
+    fabric_ca_host: "{{ organization.fabric_ca_host }}"
+    fabric_ca_use_tls: "{{ hostvars[organization.fabric_ca_host].fabric_ca_use_tls | default(false) }}"
+    fabric_ca_name: "{{ hostvars[organization.fabric_ca_host].fabric_ca_name }}"
+    fabric_ca_msp_dir: "{{ evm_gateway_remote_config_dir }}/users/{{ current_user.name }}@{{ organization.domain }}/msp"
+    fabric_ca_cryptogenize_msp_ca_cert_file: "cacerts/ca.{{ organization.domain }}-cert.pem"
+    fabric_ca_cryptogenize_msp_signcert_file: "signcerts/{{ current_user.name }}@{{ organization.domain }}-cert.pem"
+    fabric_ca_tls_certfile: "{{ evm_gateway_remote_config_dir }}/tlscacerts/tlsca.{{ organization.domain }}-cert.pem"
+    fabric_ca_csr_hosts:
+      - "{{ inventory_hostname }}"
+      - "{{ ansible_host }}"
+      - "{{ actual_host }}"
+      - "{{ current_user.name }}"
+    fabric_ca_identity:
+      name: "{{ current_user.name }}"
+      secret: "{{ current_user.secret }}"
+  ansible.builtin.include_role:
+    name: hyperledger.fabricx.fabric_ca
+    tasks_from: client/enroll
+  loop: "{{ organization.users }}"
+  loop_control:
+    loop_var: current_user
+    label: "{{ organization.domain }}:{{ current_user.name }}"
+  when:
+    - organization.users is defined
+
+# =========================
+# Server TLS (gateway's own listener and metrics endpoint)
+# =========================
+- name: Initialize EVM gateway TLS SAN hosts
+  ansible.builtin.set_fact:
+    evm_gateway_tls_san_hosts: "{{ ansible_all_ipv4_addresses + [ansible_host, actual_host, inventory_hostname] }}"
+
+- name: Generate Fabric-X EVM gateway server TLS crypto material
+  vars:
+    fabric_ca_host: "{{ organization.fabric_ca_host }}"
+    fabric_ca_use_tls: "{{ hostvars[organization.fabric_ca_host].fabric_ca_use_tls | default(false) }}"
+    fabric_ca_name: "{{ hostvars[organization.fabric_ca_host].fabric_ca_name }}"
+    fabric_ca_msp_dir: "{{ evm_gateway_remote_config_dir }}/tls"
+    fabric_ca_tls_certfile: "{{ evm_gateway_remote_config_dir }}/tlscacerts/tlsca.{{ organization.domain }}-cert.pem"
+    fabric_ca_enrollment_profile: tls
+    fabric_ca_csr_hosts: "{{ evm_gateway_tls_san_hosts | unique }}"
+    fabric_ca_identity:
+      name: "{{ organization.peer.name | default(inventory_hostname) }}"
+      secret: "{{ organization.peer.secret }}"
+  ansible.builtin.include_role:
+    name: hyperledger.fabricx.fabric_ca
+    tasks_from: client/enroll
+  when:
+    - evm_gateway_use_tls or evm_gateway_monitoring_use_tls
+
+# =========================
+# User TLS (client certs for mTLS to orderers and committer)
+# =========================
+- name: Generate Fabric-X EVM gateway user TLS crypto material
+  vars:
+    fabric_ca_host: "{{ organization.fabric_ca_host }}"
+    fabric_ca_use_tls: "{{ hostvars[organization.fabric_ca_host].fabric_ca_use_tls | default(false) }}"
+    fabric_ca_name: "{{ hostvars[organization.fabric_ca_host].fabric_ca_name }}"
+    fabric_ca_msp_dir: "{{ evm_gateway_remote_config_dir }}/users/{{ organization.users[0].name }}@{{ organization.domain }}/tls"
+    fabric_ca_tls_certfile: "{{ evm_gateway_remote_config_dir }}/tlscacerts/tlsca.{{ organization.domain }}-cert.pem"
+    fabric_ca_enrollment_profile: tls
+    fabric_ca_csr_hosts: "{{ evm_gateway_tls_san_hosts | unique }}"
+    fabric_ca_identity:
+      name: "{{ organization.users[0].name }}"
+      secret: "{{ organization.users[0].secret }}"
+  ansible.builtin.include_role:
+    name: hyperledger.fabricx.fabric_ca
+    tasks_from: client/enroll
+  when:
+    - organization.users is defined
+    - evm_gateway_use_tls or evm_gateway_use_mtls
+
+- name: Copy user TLS cert as EVM gateway mTLS client cert
+  ansible.builtin.copy:
+    src: "{{ evm_gateway_remote_config_dir }}/users/{{ organization.users[0].name }}@{{ organization.domain }}/tls/server.crt"
+    dest: "{{ evm_gateway_remote_config_dir }}/tls/client.crt"
+    remote_src: true
+    mode: "0o644"
+  when:
+    - organization.users is defined
+    - evm_gateway_use_tls or evm_gateway_use_mtls
+
+- name: Copy user TLS key as EVM gateway mTLS client key
+  ansible.builtin.copy:
+    src: "{{ evm_gateway_remote_config_dir }}/users/{{ organization.users[0].name }}@{{ organization.domain }}/tls/server.key"
+    dest: "{{ evm_gateway_remote_config_dir }}/tls/client.key"
+    remote_src: true
+    mode: "0o600"
+  when:
+    - organization.users is defined
+    - evm_gateway_use_tls or evm_gateway_use_mtls

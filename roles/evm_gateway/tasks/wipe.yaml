@@ -1,0 +1,20 @@
+#
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+- name: Teardown Fabric-X EVM gateway
+  ansible.builtin.include_role:
+    name: hyperledger.fabricx.evm_gateway
+    tasks_from: teardown
+
+- name: Remove Fabric-X EVM gateway crypto files
+  ansible.builtin.include_role:
+    name: hyperledger.fabricx.evm_gateway
+    tasks_from: crypto/rm
+
+- name: Remove Fabric-X EVM gateway configuration files
+  ansible.builtin.include_role:
+    name: hyperledger.fabricx.evm_gateway
+    tasks_from: config/rm

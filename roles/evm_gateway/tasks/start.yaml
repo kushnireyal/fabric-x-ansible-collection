@@ -1,0 +1,17 @@
+#
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+- name: Start Fabric-X EVM gateway container
+  ansible.builtin.include_role:
+    name: hyperledger.fabricx.evm_gateway
+    tasks_from: container/start
+  when: evm_gateway_use_container
+
+- name: Start Fabric-X EVM gateway binary
+  ansible.builtin.include_role:
+    name: hyperledger.fabricx.evm_gateway
+    tasks_from: bin/start
+  when: evm_gateway_use_bin

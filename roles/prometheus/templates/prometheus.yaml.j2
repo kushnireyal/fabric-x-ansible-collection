@@ -100,3 +100,14 @@ scrape_configs:
 {% endif %}
 {% endfor %}
 {% endif %}
+{% if prometheus_extra_static_jobs is defined %}
+{% for job in prometheus_extra_static_jobs %}
+  - job_name: {{ job.job_name }}
+    scheme: {{ job.scheme | default('http') }}
+    static_configs:
+      - targets:
+{% for target in job.targets %}
+        - {{ target }}
+{% endfor %}
+{% endfor %}
+{% endif %}

@@ -1,0 +1,39 @@
+#
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# =========================
+# User sign certs (needed by fxconfig namespace creation with threshold policy)
+# =========================
+- name: Fetch Fabric-X EVM gateway user sign certificates
+  ansible.builtin.fetch:
+    src: "{{ evm_gateway_remote_config_dir }}/users/{{ current_user.name }}@{{ organization.domain }}/msp/signcerts/{{ current_user.name }}@{{ organization.domain }}-cert.pem"
+    dest: "{{ fetched_artifacts_dir }}/crypto/peerOrganizations/{{ organization.domain }}/users/{{ current_user.name }}@{{ organization.domain }}/msp/signcerts/{{ current_user.name }}@{{ organization.domain }}-cert.pem"
+    flat: true
+  loop: "{{ organization.users }}"
+  loop_control:
+    loop_var: current_user
+    label: "{{ organization.domain }}:{{ current_user.name }}"
+  when:
+    - organization.users is defined
+
+# =========================
+# TLS certs (so other nodes can trust this gateway)
+# =========================
+- name: Fetch Fabric-X EVM gateway TLS CA certificate
+  ansible.builtin.fetch:
+    src: "{{ evm_gateway_remote_config_dir }}/tls/ca.crt"
+    dest: "{{ fetched_artifacts_dir }}/{{ inventory_hostname }}/tls/ca.crt"
+    flat: true
+  when:
+    - evm_gateway_use_tls or evm_gateway_monitoring_use_tls
+
+- name: Fetch Fabric-X EVM gateway TLS certificate
+  ansible.builtin.fetch:
+    src: "{{ evm_gateway_remote_config_dir }}/tls/server.crt"
+    dest: "{{ fetched_artifacts_dir }}/{{ inventory_hostname }}/tls/server.crt"
+    flat: true
+  when:
+    - evm_gateway_use_tls or evm_gateway_monitoring_use_tls
